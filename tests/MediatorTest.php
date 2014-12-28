@@ -5,9 +5,9 @@ namespace Mediator\Tests;
 use Mediator\Container;
 use Mediator\Mediator;
 use Mediator\Tests\Fixture\AnotherPingHandler;
+use Mediator\Tests\Fixture\ExceptionPingHandler;
 use Mediator\Tests\Fixture\Ping;
 use Mediator\Tests\Fixture\PingHandler;
-use Mediator\Tests\Fixture\Simple;
 
 class MediatorTest extends \PHPUnit_Framework_TestCase
 {
@@ -22,6 +22,19 @@ class MediatorTest extends \PHPUnit_Framework_TestCase
 		$this->assertCount(2, $handler->messages);
 		$this->assertEquals('ping1 pong', $handler->messages[0]);
 		$this->assertEquals('ping2 pong', $handler->messages[1]);
+	}
+
+	public function testSafeHandling()
+	{
+		$container = (new Container)->add(new ExceptionPingHandler());
+		$mediator = new Mediator($container);
+		$exceptionMessage = '';
+
+		$mediator->notifySafe(new Ping('ping'), function(\Exception $e) use (&$exceptionMessage) {
+			$exceptionMessage = $e->getMessage();
+		});
+
+		$this->assertEquals('Test exception', $exceptionMessage);
 	}
 
 	public function testResult()
