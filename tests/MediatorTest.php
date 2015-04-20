@@ -2,60 +2,86 @@
 
 namespace Mediator\Tests;
 
-use Mediator\Container;
 use Mediator\Mediator;
-use Mediator\Tests\Fixture\AnotherPingHandler;
-use Mediator\Tests\Fixture\ExceptionPingHandler;
+use Mediator\Tests\Fixture\ModifierHandler;
+use Mediator\Tests\Fixture\ExceptionHandler;
 use Mediator\Tests\Fixture\Ping;
-use Mediator\Tests\Fixture\PingHandler;
+use Mediator\Tests\Fixture\StatefulHandler;
 
 class MediatorTest extends \PHPUnit_Framework_TestCase
 {
 	public function testHandling()
 	{
-		$container = (new Container)->add($handler = new PingHandler());
-		$mediator = new Mediator($container);
+		// arrange
+		$handler = new StatefulHandler();
+		$mediator = (new Mediator())->register($handler);
 
-		$mediator->notify(new Ping('ping1'));
-		$mediator->notify(new Ping('ping2'));
+		// act
+		$mediator->handle(new Ping('1'));
+		$mediator->handle(new Ping('2'));
 
+		// assert
 		$this->assertCount(2, $handler->messages);
 		$this->assertEquals('ping1 pong', $handler->messages[0]);
 		$this->assertEquals('ping2 pong', $handler->messages[1]);
 	}
 
-	public function testSafeHandling()
+	public function testUnhandledException()
 	{
-		$container = (new Container)->add(new ExceptionPingHandler());
-		$mediator = new Mediator($container);
+		// arrange
+		$mediator = (new Mediator())->register(new ExceptionHandler());
+		$command = new Ping();
+
+		// act
+		$this->setExpectedException('Mediator\MediatorException');
+		$mediator->handle($command);
+	}
+
+	public function testHandlingExceptionByCallback()
+	{
+		// arrange
+		$handler = new StatefulHandler();
+		$mediator = (new Mediator())
+			->register(new ExceptionHandler())
+			->register($handler);
 		$exceptionMessage = '';
 
-		$mediator->notifySafe(new Ping('ping'), function(\Exception $e) use (&$exceptionMessage) {
+		// act
+		$mediator->handle(new Ping(), function(\Exception $e) use (&$exceptionMessage) {
 			$exceptionMessage = $e->getMessage();
 		});
 
+		// assert
 		$this->assertEquals('Test exception', $exceptionMessage);
+		$this->assertCount(1, $handler->messages);
+		$this->assertEquals('ping pong', $handler->messages[0]);
 	}
 
-	public function testResult()
+	public function testMultipleHandlers()
 	{
-		$container = (new Container)
-			->add(new PingHandler())
-			->add(new AnotherPingHandler());
-		$mediator = new Mediator($container);
+		// arrange
+		$handler = new StatefulHandler();
+		$mediator = (new Mediator())
+			->register($handler)
+			->register(new ModifierHandler());
 
-		$result = $mediator->notify(new Ping('ping'));
+		$command = new Ping();
 
-		$this->assertCount(2, $result);
-		$this->assertContains('ping pong', $result);
-		$this->assertContains('ping another pong', $result);
+		// act
+		$mediator->handle($command);
+
+		// assert
+		$this->assertEquals('ping pong', $handler->messages[0]);
+		$this->assertContains('ping modified by pong', $command->message);
 	}
 
 	public function testException()
 	{
-		$this->setExpectedException('Mediator\MediatorException', 'Handlers was not found for query of type <Mediator\\Tests\\Fixture\\Ping>');
+		// arrange
+		$mediator = new Mediator();
 
-		$mediator = new Mediator(new Container());
-		$mediator->notify(new Ping(''));
+		// act
+		$this->setExpectedException('Mediator\MediatorException', 'Handlers were not found for command <Mediator\\Tests\\Fixture\\Ping>');
+		$mediator->handle(new Ping());
 	}
 }

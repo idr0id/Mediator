@@ -2,46 +2,65 @@
 
 namespace Mediator;
 
+/**
+ * Class Mediator
+ *
+ * @package Mediator
+ */
 class Mediator
 {
-	private $container;
+	/**
+	 * @var ICommandHandler[]
+	 */
+	private $handlers = [];
 
-	public function __construct(Container $container)
+	/**
+	 * Register command handler
+	 *
+	 * @param ICommandHandler $handler
+	 * @return $this
+	 * @throws \Exception
+	 */
+	public function register(ICommandHandler $handler)
 	{
-		$this->container = $container;
-	}
-
-	public function notify(IQuery $query)
-	{
-		$result = [];
-		foreach ($this->getHandlers($query) as $handler) {
-			$result[] = $handler->handle($query);
+		$class = get_class($handler);
+		if (isset($this->handlers[$class])) {
+			throw new MediatorException(sprintf('Handler <%s> already registered', get_class($handler)));
 		}
-		return $result;
+		$this->handlers[$class] = $handler;
+
+		return $this;
 	}
 
-	public function notifySafe(IQuery $query, \Closure $exceptionCallback = null)
+	/**
+	 * Handle command
+	 *
+	 * @param ICommand $command
+	 * @param \Closure|null $exceptionCallback
+	 * @throws MediatorException
+	 */
+	public function handle(ICommand $command, \Closure $exceptionCallback = null)
 	{
-		$result = [];
-		foreach ($this->getHandlers($query) as $handler) {
+		$isHandled = false;
+		foreach ($this->handlers as $handler) {
+			if (!$handler->isSatisfiedBy($command)) {
+				continue;
+			}
+
+			$isHandled = true;
+
 			try {
-				$result[] = $handler->handle($query);
+				$handler->handle($command);
 			} catch (\Exception $e) {
-				if ($exceptionCallback) {
-					$exceptionCallback($e);
+				if (!$exceptionCallback) {
+					throw new MediatorException('Unhandled exception while handling command <%s> by handler <%s>', 0, $e);
 				}
+				$exceptionCallback($e);
 			}
 		}
-		return $result;
-	}
 
-	private function getHandlers(IQuery $query)
-	{
-		$handlers = $this->container->all($query);
-
-		if (!count($handlers)) {
-			throw new MediatorException(sprintf('Handlers was not found for query of type <%s>', get_class($query)));
+		if (!$isHandled) {
+			throw new MediatorException(sprintf('Handlers were not found for command <%s>', get_class($command)));
 		}
-		return $handlers;
 	}
 }

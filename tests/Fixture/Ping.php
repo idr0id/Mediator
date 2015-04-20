@@ -2,14 +2,14 @@
 
 namespace Mediator\Tests\Fixture;
 
-use Mediator\IQuery;
+use Mediator\ICommand;
 
-class Ping implements IQuery
+class Ping implements ICommand
 {
 	public $message;
 
-	public function __construct($message)
+	public function __construct($suffix = '')
 	{
-		$this->message = $message;
+		$this->message = 'ping' . $suffix;
 	}
 }

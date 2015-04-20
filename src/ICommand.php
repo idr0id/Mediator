@@ -2,6 +2,6 @@
 
 namespace Mediator;
 
-interface IQuery
+interface ICommand
 {
 }
